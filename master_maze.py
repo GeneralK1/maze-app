@@ -105,16 +105,11 @@ class MasterMaze:
     def _get_zone_3x3(self, x, y):
         return min(2, int(x / (self.width / 3))) + min(2, int(y / (self.height / 3))) * 3
 
-    # ==========================================
-    # ИЗМЕНЕНИЕ 1: Уменьшена доля центра в пуле
-    # ==========================================
     def generate_cp_pool(self, total_cps):
         corners = self._get_fresh_valid_corners()
         random.shuffle(corners)
         center_cps = [p for p in corners if self._get_zone_3x3(*p) == 4]
         outer_cps = [p for p in corners if self._get_zone_3x3(*p) != 4]
-        
-        # Было 0.4 (40%), стало 0.25 (25%). Больше точек по краям!
         center_count = max(int(total_cps * 0.25), 2)
         return center_cps[:center_count] + outer_cps[:total_cps - center_count]
 
@@ -137,16 +132,12 @@ class MasterMaze:
 
         route = [start]
         current = start
+        prev_p = None
         used_counts = {p: 0 for p in pool}
 
         for _ in range(target_len):
-            # ==========================================
-            # ИЗМЕНЕНИЕ 2: Поиск пустых зон
-            # ==========================================
             zones = [0] * 9
             for p in route: zones[self._get_zone_3x3(*p)] += 1
-            
-            # Находим зоны, где меньше всего пунктов (приоритет заполнения)
             min_visits = min(zones)
             target_zones = [z for z, count in enumerate(zones) if count == min_visits]
 
@@ -164,12 +155,21 @@ class MasterMaze:
                 dist = math.hypot(p[0]-current[0], p[1]-current[1])
                 if difficulty < 0.3 and dist > max_leg_dist: continue
 
-                # Логика приоритетов
+                # 🔄 ЗАПРЕТ БЛИЗКИХ К 0° УГЛОВ (менее ~30 градусов)
+                if prev_p is not None:
+                    dx_in, dy_in = current[0]-prev_p[0], current[1]-prev_p[1]
+                    dx_out, dy_out = p[0]-current[0], p[1]-current[1]
+                    dot = dx_in*dx_out + dy_in*dy_out
+                    mag_in = math.hypot(dx_in, dy_in)
+                    mag_out = math.hypot(dx_out, dy_out)
+                    if mag_in > 0.1 and mag_out > 0.1:
+                        cos_theta = dot / (mag_in * mag_out)
+                        if cos_theta > 0.85: continue
+
                 pri = 0
-                if count == 0: pri += 2  # Бонус за первый визит
-                
-                # ГИГАНТСКИЙ бонус, если точка находится в "пустой" зоне
+                if count == 0: pri += 2
                 if zone in target_zones: pri += 5 
+                if is_center: pri += 1 
 
                 dist_score = -dist if prefer_short else dist
                 candidates.append({'p': p, 'pri': pri, 'dist_score': dist_score})
@@ -183,10 +183,16 @@ class MasterMaze:
             
             route.append(chosen)
             used_counts[chosen] += 1
+            prev_p = current
             current = chosen
 
         route.append(finish)
         return route
+
+    def _draw_pole(self, ax, x, y, color, zorder):
+        """Рисует знак столба КП (вертикальная линия + перекладина)"""
+        ax.plot([x, x], [y, y + 0.45], color=color, lw=1.8, solid_capstyle='round', zorder=zorder)
+        ax.plot([x - 0.12, x + 0.12], [y + 0.35, y + 0.35], color=color, lw=1.8, solid_capstyle='round', zorder=zorder)
 
     def _get_optimal_text_pos(self, cx, cy, vx, vy, all_centers, adjacents, label=""):
         dirs = [(1, 1), (-1, 1), (-1, -1), (1, -1), (0, 1), (0, -1), (1, 0), (-1, 0)]
@@ -274,7 +280,7 @@ class MasterMaze:
                     points.add((x + 1, y + 1))
         return points
 
-    def draw_map(self, filename, course_points, title="", draw_lines=True, is_master=False):
+    def draw_map(self, filename, course_points, title="", draw_lines=True, is_master=False, pole_coords=None):
         ar = self.width / self.height
         base_w, base_h = 8.27, 5.83
         if ar > 1: fw, fh = base_w, base_w / ar
@@ -360,6 +366,11 @@ class MasterMaze:
             ax.add_patch(patches.Circle((px, py), 0.35, edgecolor=col_c, facecolor='none', lw=sw, zorder=4))
             ax.add_patch(patches.Circle((px, py), 0.26, edgecolor=col_c, facecolor='none', lw=sw, zorder=4))
 
+            # 🔵 Рисуем знаки столбов
+            poles_to_draw = pole_coords if pole_coords else unique_cp_coords
+            for px, py in poles_to_draw:
+                self._draw_pole(ax, px, py, col_c, zorder=3.5)
+
             for coord, indices in cp_indices_map.items():
                 px, py = coord_to_shifted[coord]
                 label = "/".join(map(str, indices))
@@ -379,49 +390,3 @@ class MasterMaze:
 
         plt.savefig(filename, format='png' if hasattr(filename, 'read') else 'pdf', bbox_inches='tight', pad_inches=0.3)
         plt.close()
-
-if __name__ == "__main__":
-    print("=" * 60)
-    print("       🌀 МАСТЕР ЛАБИРИНТ (Full Coverage) 🌀")
-    print("=" * 60)
-    try:
-        w = int(input("\n📏 Ширина (5-50): "))
-        h = int(input("📏 Высота (5-50): "))
-        cp_total = int(input("🚩 Уникальных точек в пуле КП: "))
-        num_c = int(input("🔢 Количество дистанций: "))
-        
-        maze = MasterMaze(w, h)
-        print("\n⏳ Генерация геометрии лабиринта...")
-        maze.generate_maze()
-        maze.add_route_choices(variety=0.15)
-        maze.enforce_constraints()
-        maze.create_entrance()
-        
-        print("🗺️ 1/3 Создание пула координат (Больше точек по краям)...")
-        cp_pool = maze.generate_cp_pool(cp_total)
-        
-        print("🗺️ 2/3 Генерация дистанций...\n")
-        start_coord = (maze.entrance_pos, 0) if maze.entrance_side == 'bottom' else \
-                      (maze.entrance_pos, h) if maze.entrance_side == 'top' else \
-                      (0, maze.entrance_pos) if maze.entrance_side == 'left' else (w, maze.entrance_pos)
-        finish_coord = (maze.entrance_pos + 1, 0) if maze.entrance_side == 'bottom' else \
-                       (maze.entrance_pos + 1, h) if maze.entrance_side == 'top' else \
-                       (0, maze.entrance_pos + 1) if maze.entrance_side == 'left' else (w, maze.entrance_pos + 1)
-
-        for i in range(num_c):
-            ratio = 0.4 + 0.6 * (i / max(1, num_c - 1))
-            target_len = max(3, int(cp_total * ratio))
-            path = maze.generate_course(cp_pool, start_coord, finish_coord, target_len, i, num_c)
-            
-            fname = f"Maze_Course_{i+1}.pdf"
-            maze.draw_map(fname, path, title=f"ДИСТАНЦИЯ {i+1}", draw_lines=True, is_master=False)
-            print(f"✅ {fname} ({len(path)-2} шагов)")
-            
-        print("\n🗺️ 3/3 Отрисовка Мастер-карты...")
-        master_path = [start_coord] + cp_pool + [finish_coord]
-        maze.draw_map("Maze_Master.pdf", master_path, title="МАСТЕР-КАРТА", draw_lines=False, is_master=True)
-        print(f"✅ Maze_Master.pdf (Все точки пула + разметка)\n🎉 Готово!")
-    except Exception as e:
-        print(f"❌ Ошибка: {e}")
-        import traceback
-        traceback.print_exc()
