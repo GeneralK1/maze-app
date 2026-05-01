@@ -155,7 +155,7 @@ class MasterMaze:
                 dist = math.hypot(p[0]-current[0], p[1]-current[1])
                 if difficulty < 0.3 and dist > max_leg_dist: continue
 
-                # 🔄 ЗАПРЕТ БЛИЗКИХ К 0° УГЛОВ (менее ~30 градусов)
+                # 🔄 ЗАПРЕТ БЛИЗКИХ К 0° УГЛОВ (менее ~32 градусов)
                 if prev_p is not None:
                     dx_in, dy_in = current[0]-prev_p[0], current[1]-prev_p[1]
                     dx_out, dy_out = p[0]-current[0], p[1]-current[1]
@@ -189,10 +189,14 @@ class MasterMaze:
         route.append(finish)
         return route
 
-    def _draw_pole(self, ax, x, y, color, zorder):
-        """Рисует знак столба КП (вертикальная линия + перекладина)"""
-        ax.plot([x, x], [y, y + 0.45], color=color, lw=1.8, solid_capstyle='round', zorder=zorder)
-        ax.plot([x - 0.12, x + 0.12], [y + 0.35, y + 0.35], color=color, lw=1.8, solid_capstyle='round', zorder=zorder)
+    def _draw_iof_pole_526(self, ax, x, y, color, zorder):
+        """
+        Рисует знак столба КП строго по IOF ISOM 2017 №526.
+        Линия: 0.25 мм (~1.0 pt). Пропорции: 4.5 x 3.0 мм.
+        Низ вертикальной линии касается контрольного круга.
+        """
+        ax.plot([x, x], [y - 0.35, y + 0.45], color=color, lw=1.0, solid_capstyle='round', zorder=zorder)
+        ax.plot([x - 0.25, x + 0.25], [y + 0.45, y + 0.45], color=color, lw=1.0, solid_capstyle='round', zorder=zorder)
 
     def _get_optimal_text_pos(self, cx, cy, vx, vy, all_centers, adjacents, label=""):
         dirs = [(1, 1), (-1, 1), (-1, -1), (1, -1), (0, 1), (0, -1), (1, 0), (-1, 0)]
@@ -353,6 +357,7 @@ class MasterMaze:
                                 [p1[1]+ny*0.35, p2[1]-ny*0.35], 
                                 color=col_c, lw=current_lw, solid_capstyle='round', zorder=3)
 
+            # Старт
             px, py = full_shifted[0]
             ang = np.arctan2(full_shifted[1][1]-py, full_shifted[1][0]-px)
             sz = 0.45
@@ -362,15 +367,17 @@ class MasterMaze:
                                   closed=True, edgecolor=col_c, facecolor='none', lw=sw, zorder=4)
             ax.add_patch(tri)
 
+            # Финиш
             px, py = full_shifted[-1]
             ax.add_patch(patches.Circle((px, py), 0.35, edgecolor=col_c, facecolor='none', lw=sw, zorder=4))
             ax.add_patch(patches.Circle((px, py), 0.26, edgecolor=col_c, facecolor='none', lw=sw, zorder=4))
 
-            # 🔵 Рисуем знаки столбов
+            # 🔵 Рисуем знаки столбов (IOF 526)
             poles_to_draw = pole_coords if pole_coords else unique_cp_coords
             for px, py in poles_to_draw:
-                self._draw_pole(ax, px, py, col_c, zorder=3.5)
+                self._draw_iof_pole_526(ax, px, py, col_c, zorder=3.5)
 
+            # КП и номера
             for coord, indices in cp_indices_map.items():
                 px, py = coord_to_shifted[coord]
                 label = "/".join(map(str, indices))
