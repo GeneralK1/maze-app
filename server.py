@@ -10,7 +10,7 @@ from master_maze import MasterMaze
 app = Flask(__name__, static_folder='static')
 CORS(app)
 
-# Хранилище сгенерированных лабиринтов (очищается при скачивании)
+# Временное хранилище сгенерированных лабиринтов
 maze_sessions = {}
 
 @app.route('/preview', methods=['POST'])
@@ -35,7 +35,7 @@ def preview():
         cp_pool = maze.generate_cp_pool(cp_total)
         master_path = [start_coord] + cp_pool + [finish_coord]
 
-        # 🔑 Сохраняем состояние в память и создаём токен
+        # 🔑 Создаём токен и сохраняем лабиринт
         token = str(uuid.uuid4())
         maze_sessions[token] = {
             'maze': maze,
@@ -48,7 +48,10 @@ def preview():
         maze.draw_map(img_buffer, master_path, title="ПРЕДПРОСМОТР", draw_lines=False, is_master=True, pole_coords=cp_pool, img_format='png')
         img_buffer.seek(0)
         
-        return jsonify({"success": True, "image": f"image/png;base64,{base64.b64encode(img_buffer.read()).decode('utf-8')}", "token": token})
+        # ✅ ИСПРАВЛЕНО: добавлен обязательный префикс 'data:'
+        img_data = f"data:image/png;base64,{base64.b64encode(img_buffer.read()).decode('utf-8')}"
+        
+        return jsonify({"success": True, "image": img_data, "token": token})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -61,7 +64,7 @@ def generate():
         if not token or token not in maze_sessions:
             return jsonify({"error": "Сначала нажмите 'Предпросмотр'"}), 400
 
-        # 🔑 Забираем сохранённый лабиринт и удаляем из памяти
+        # 🔑 Забираем сохранённый лабиринт
         session = maze_sessions.pop(token)
         maze, start, finish, pool = session['maze'], session['start'], session['finish'], session['pool']
         num_c = int(data.get('courses', 3))
