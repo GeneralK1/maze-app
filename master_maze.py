@@ -189,14 +189,15 @@ class MasterMaze:
         route.append(finish)
         return route
 
-    def _draw_iof_pole_526(self, ax, x, y, color, zorder):
+    def _draw_center_marker(self, ax, x, y, color, zorder):
         """
-        Рисует знак столба КП строго по IOF ISOM 2017 №526.
-        Линия: 0.25 мм (~1.0 pt). Пропорции: 4.5 x 3.0 мм.
-        Низ вертикальной линии касается контрольного круга.
+        Рисует точный центральный знак: круг с точкой в центре.
+        Размещается строго в центре координат КП.
         """
-        ax.plot([x, x], [y - 0.35, y + 0.45], color=color, lw=1.0, solid_capstyle='round', zorder=zorder)
-        ax.plot([x - 0.25, x + 0.25], [y + 0.45, y + 0.45], color=color, lw=1.0, solid_capstyle='round', zorder=zorder)
+        # Внешний круг (радиус 0.15 м)
+        ax.add_patch(patches.Circle((x, y), 0.15, edgecolor=color, facecolor='none', linewidth=1.0, zorder=zorder))
+        # Точка в центре (радиус 0.04 м)
+        ax.add_patch(patches.Circle((x, y), 0.04, facecolor=color, edgecolor='none', zorder=zorder))
 
     def _get_optimal_text_pos(self, cx, cy, vx, vy, all_centers, adjacents, label=""):
         dirs = [(1, 1), (-1, 1), (-1, -1), (1, -1), (0, 1), (0, -1), (1, 0), (-1, 0)]
@@ -372,10 +373,10 @@ class MasterMaze:
             ax.add_patch(patches.Circle((px, py), 0.35, edgecolor=col_c, facecolor='none', lw=sw, zorder=4))
             ax.add_patch(patches.Circle((px, py), 0.26, edgecolor=col_c, facecolor='none', lw=sw, zorder=4))
 
-            # 🔵 Рисуем знаки столбов (IOF 526)
+            # 🔵 Рисуем центральные маркеры (Круг + Точка)
             poles_to_draw = pole_coords if pole_coords else unique_cp_coords
             for px, py in poles_to_draw:
-                self._draw_iof_pole_526(ax, px, py, col_c, zorder=3.5)
+                self._draw_center_marker(ax, px, py, col_c, zorder=3.5)
 
             # КП и номера
             for coord, indices in cp_indices_map.items():
