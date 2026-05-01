@@ -377,7 +377,7 @@ class MasterMaze:
                         fontweight='bold', zorder=5, clip_on=False,
                         bbox=dict(facecolor='white', alpha=0.9, edgecolor='none', pad=0.1))
 
-        plt.savefig(filename, format='pdf', bbox_inches='tight', pad_inches=0.3)
+        plt.savefig(filename, format='png' if hasattr(filename, 'read') else 'pdf', bbox_inches='tight', pad_inches=0.3)
         plt.close()
 
 if __name__ == "__main__":

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мастер Лабиринт</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; background: #f0f2f5; color: #333; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 400px; margin: 0 auto; }
+        h2 { margin-top: 0; text-align: center; color: #0077FF; }
+        label { display: block; margin-top: 10px; font-weight: 500; }
+        input { width: 100%; padding: 10px; margin: 5px 0 15px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+        .btn-group { display: flex; gap: 10px; margin-top: 15px; }
+        button { flex: 1; padding: 12px; border: none; border-radius: 6px; font-size: 15px; cursor: pointer; transition: 0.2s; }
+        .btn-preview { background: #0077FF; color: white; }
+        .btn-download { background: #28a745; color: white; display: none; }
+        .btn-preview:disabled, .btn-download:disabled { background: #ccc; cursor: not-allowed; }
+        #status { margin-top: 15px; text-align: center; min-height: 20px; font-weight: 500; }
+        #preview-container { margin-top: 20px; text-align: center; display: none; }
+        #preview-img { max-width: 100%; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+        .hint { font-size: 12px; color: #666; text-align: center; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>🌀 Мастер Лабиринт</h2>
+        <p class="hint">Генерация карт для спортивного ориентирования</p>
+        
+        <label>Ширина (5-50 м):</label>
+        <input type="number" id="w" value="20" min="5" max="50">
+        
+        <label>Высота (5-50 м):</label>
+        <input type="number" id="h" value="20" min="5" max="50">
+        
+        <label>Всего КП на карте:</label>
+        <input type="number" id="cp" value="15" min="5" max="50">
+        
+        <label>Количество дистанций:</label>
+        <input type="number" id="courses" value="3" min="1" max="10">
+
+        <div class="btn-group">
+            <button id="btn-preview" class="btn-preview" onclick="showPreview()">🔍 Предпросмотр</button>
+            <button id="btn-download" class="btn-download" onclick="downloadZip()">📥 Скачать ZIP</button>
+        </div>
+        <div id="status"></div>
+
+        <div id="preview-container">
+            <h3>Мастер-карта:</h3>
+            <img id="preview-img" alt="Предпросмотр карты">
+            <p class="hint">Нажмите "Скачать ZIP" для получения всех дистанций или "Предпросмотр" для перегенерации.</p>
+        </div>
+    </div>
+
+    <script>
+        async function showPreview() {
+            const btnP = document.getElementById('btn-preview');
+            const btnD = document.getElementById('btn-download');
+            const status = document.getElementById('status');
+            const container = document.getElementById('preview-container');
+            
+            btnP.disabled = true;
+            btnD.style.display = 'none';
+            container.style.display = 'none';
+            status.textContent = '⏳ Генерация предпросмотра...';
+
+            try {
+                const res = await fetch('/preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        w: +document.getElementById('w').value,
+                        h: +document.getElementById('h').value,
+                        cp: +document.getElementById('cp').value
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('preview-img').src = data.image;
+                    container.style.display = 'block';
+                    btnD.style.display = 'block';
+                    status.textContent = '✅ Готово!';
+                } else {
+                    status.textContent = '❌ ' + (data.error || 'Ошибка генерации');
+                }
+            } catch (e) {
+                status.textContent = '❌ Ошибка соединения';
+            } finally {
+                btnP.disabled = false;
+            }
+        }
+
+        async function downloadZip() {
+            const btnP = document.getElementById('btn-preview');
+            const btnD = document.getElementById('btn-download');
+            const status = document.getElementById('status');
+            
+            btnD.disabled = true;
+            status.textContent = '⏳ Подготовка полного комплекта...';
+
+            try {
+                const res = await fetch('/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        w: +document.getElementById('w').value,
+                        h: +document.getElementById('h').value,
+                        cp: +document.getElementById('cp').value,
+                        courses: +document.getElementById('courses').value
+                    })
+                });
+                if (!res.ok) throw new Error('Ошибка сервера');
+                
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Maze_Set_${+document.getElementById('w').value}x${+document.getElementById('h').value}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                status.textContent = '✅ Скачивание началось!';
+            } catch (e) {
+                status.textContent = '❌ Ошибка скачивания';
+            } finally {
+                btnD.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
