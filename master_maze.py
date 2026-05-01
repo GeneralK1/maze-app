@@ -191,13 +191,13 @@ class MasterMaze:
 
     def _draw_center_marker(self, ax, x, y, color, zorder):
         """
-        Рисует точный центральный знак: круг с точкой в центре.
-        Размещается строго в центре координат КП.
+        Рисует чёрный маркер места установки КП: круг с точкой в центре.
+        Размещается строго в смещённом центре КП.
         """
         # Внешний круг (радиус 0.15 м)
         ax.add_patch(patches.Circle((x, y), 0.15, edgecolor=color, facecolor='none', linewidth=1.0, zorder=zorder))
-        # Точка в центре (радиус 0.04 м)
-        ax.add_patch(patches.Circle((x, y), 0.04, facecolor=color, edgecolor='none', zorder=zorder))
+        # Жирная точка в центре (радиус 0.05 м)
+        ax.add_patch(patches.Circle((x, y), 0.05, facecolor=color, edgecolor='none', zorder=zorder))
 
     def _get_optimal_text_pos(self, cx, cy, vx, vy, all_centers, adjacents, label=""):
         dirs = [(1, 1), (-1, 1), (-1, -1), (1, -1), (0, 1), (0, -1), (1, 0), (-1, 0)]
@@ -373,10 +373,14 @@ class MasterMaze:
             ax.add_patch(patches.Circle((px, py), 0.35, edgecolor=col_c, facecolor='none', lw=sw, zorder=4))
             ax.add_patch(patches.Circle((px, py), 0.26, edgecolor=col_c, facecolor='none', lw=sw, zorder=4))
 
-            # 🔵 Рисуем центральные маркеры (Круг + Точка)
-            poles_to_draw = pole_coords if pole_coords else unique_cp_coords
-            for px, py in poles_to_draw:
-                self._draw_center_marker(ax, px, py, col_c, zorder=3.5)
+            # 🔵 Рисуем ЧЁРНЫЕ маркеры места установки КП
+            # Применяем ту же функцию сдвига, что и для кругов КП, чтобы маркер был точно в центре
+            raw_poles = pole_coords if pole_coords else unique_cp_coords
+            unique_raw_poles = list(dict.fromkeys(raw_poles)) # убираем дубликаты
+            poles_shifted = [self._get_safe_shift(c[0], c[1]) for c in unique_raw_poles]
+            
+            for px, py in poles_shifted:
+                self._draw_center_marker(ax, px, py, col_w, zorder=3.5) # col_w = black
 
             # КП и номера
             for coord, indices in cp_indices_map.items():
