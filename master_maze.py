@@ -190,13 +190,7 @@ class MasterMaze:
         return route
 
     def _draw_center_marker(self, ax, x, y, color, zorder):
-        """
-        Рисует чёрный маркер места установки КП: круг с точкой в центре.
-        Размещается строго в смещённом центре КП.
-        """
-        # Внешний круг (радиус 0.15 м)
         ax.add_patch(patches.Circle((x, y), 0.15, edgecolor=color, facecolor='none', linewidth=1.0, zorder=zorder))
-        # Жирная точка в центре (радиус 0.05 м)
         ax.add_patch(patches.Circle((x, y), 0.05, facecolor=color, edgecolor='none', zorder=zorder))
 
     def _get_optimal_text_pos(self, cx, cy, vx, vy, all_centers, adjacents, label=""):
@@ -285,7 +279,8 @@ class MasterMaze:
                     points.add((x + 1, y + 1))
         return points
 
-    def draw_map(self, filename, course_points, title="", draw_lines=True, is_master=False, pole_coords=None):
+    # 🔧 ДОБАВЛЕН ПАРАМЕТР img_format
+    def draw_map(self, filename, course_points, title="", draw_lines=True, is_master=False, pole_coords=None, img_format='pdf'):
         ar = self.width / self.height
         base_w, base_h = 8.27, 5.83
         if ar > 1: fw, fh = base_w, base_w / ar
@@ -358,7 +353,6 @@ class MasterMaze:
                                 [p1[1]+ny*0.35, p2[1]-ny*0.35], 
                                 color=col_c, lw=current_lw, solid_capstyle='round', zorder=3)
 
-            # Старт
             px, py = full_shifted[0]
             ang = np.arctan2(full_shifted[1][1]-py, full_shifted[1][0]-px)
             sz = 0.45
@@ -368,21 +362,17 @@ class MasterMaze:
                                   closed=True, edgecolor=col_c, facecolor='none', lw=sw, zorder=4)
             ax.add_patch(tri)
 
-            # Финиш
             px, py = full_shifted[-1]
             ax.add_patch(patches.Circle((px, py), 0.35, edgecolor=col_c, facecolor='none', lw=sw, zorder=4))
             ax.add_patch(patches.Circle((px, py), 0.26, edgecolor=col_c, facecolor='none', lw=sw, zorder=4))
 
-            # 🔵 Рисуем ЧЁРНЫЕ маркеры места установки КП
-            # Применяем ту же функцию сдвига, что и для кругов КП, чтобы маркер был точно в центре
             raw_poles = pole_coords if pole_coords else unique_cp_coords
-            unique_raw_poles = list(dict.fromkeys(raw_poles)) # убираем дубликаты
+            unique_raw_poles = list(dict.fromkeys(raw_poles))
             poles_shifted = [self._get_safe_shift(c[0], c[1]) for c in unique_raw_poles]
             
             for px, py in poles_shifted:
-                self._draw_center_marker(ax, px, py, col_w, zorder=3.5) # col_w = black
+                self._draw_center_marker(ax, px, py, col_w, zorder=3.5)
 
-            # КП и номера
             for coord, indices in cp_indices_map.items():
                 px, py = coord_to_shifted[coord]
                 label = "/".join(map(str, indices))
@@ -400,5 +390,6 @@ class MasterMaze:
                         fontweight='bold', zorder=5, clip_on=False,
                         bbox=dict(facecolor='white', alpha=0.9, edgecolor='none', pad=0.1))
 
-        plt.savefig(filename, format='png' if hasattr(filename, 'read') else 'pdf', bbox_inches='tight', pad_inches=0.3)
+        # 🔧 ЯВНОЕ УКАЗАНИЕ ФОРМАТА
+        plt.savefig(filename, format=img_format, bbox_inches='tight', pad_inches=0.3)
         plt.close()
