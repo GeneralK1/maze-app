@@ -280,15 +280,18 @@ class MasterMaze:
         return points
 
     # 🔧 ДОБАВЛЕН ПАРАМЕТР img_format
-    def draw_map(self, filename, course_points, title="", draw_lines=True, is_master=False, pole_coords=None, img_format='pdf'):
+    def draw_map(self, filename, course_points, title="", draw_lines=True, is_master=False, pole_coords=None, img_format='pdf', paper_format='A5'):
         ar = self.width / self.height
-        base_w, base_h = 8.27, 5.83
-        if ar > 1: fw, fh = base_w, base_w / ar
-        else:      fh, fw = base_h, base_h * ar
+        # Размеры бумаги в дюймах: A4 (11.69x8.27), A5 (8.27x5.83)
+        if paper_format.upper() == 'A4': base_w, base_h = 11.69, 8.27
+        else: base_w, base_h = 8.27, 5.83
+            
+        # Автоматическая ориентация: если лабиринт широкий → landscape, иначе → portrait
+        if ar > 1: fw, fh = base_w, base_h
+        else:      fw, fh = base_h, base_w
             
         fig = plt.figure(figsize=(fw, fh))
         ax = fig.add_subplot(111)
-        
         ax.set_xlim(-1.2, self.width + 1.2)
         ax.set_ylim(-1.2, self.height + 1.4) 
         ax.set_aspect('equal', adjustable='box')
@@ -329,16 +332,13 @@ class MasterMaze:
 
         if len(course_points) > 1:
             full_shifted = [self._get_safe_shift(c[0], c[1]) for c in course_points]
-            
             cp_indices_map = {}
             for idx, coord in enumerate(course_points):
-                if 0 < idx < len(course_points) - 1:
-                    cp_indices_map.setdefault(coord, []).append(idx)
+                if 0 < idx < len(course_points) - 1: cp_indices_map.setdefault(coord, []).append(idx)
             
             unique_cp_coords = list(cp_indices_map.keys())
             unique_shifted = [self._get_safe_shift(c[0], c[1]) for c in unique_cp_coords]
             coord_to_shifted = dict(zip(unique_cp_coords, unique_shifted))
-            
             cp_count = len(course_points)
             current_lw = cw_thin if cp_count > 12 else cw_std
             
@@ -349,17 +349,12 @@ class MasterMaze:
                     d = math.hypot(dx, dy)
                     if d > 0.75:
                         nx, ny = dx/d, dy/d
-                        ax.plot([p1[0]+nx*0.35, p2[0]-nx*0.35], 
-                                [p1[1]+ny*0.35, p2[1]-ny*0.35], 
-                                color=col_c, lw=current_lw, solid_capstyle='round', zorder=3)
+                        ax.plot([p1[0]+nx*0.35, p2[0]-nx*0.35], [p1[1]+ny*0.35, p2[1]-ny*0.35], color=col_c, lw=current_lw, solid_capstyle='round', zorder=3)
 
             px, py = full_shifted[0]
             ang = np.arctan2(full_shifted[1][1]-py, full_shifted[1][0]-px)
             sz = 0.45
-            tri = patches.Polygon([(px+sz*np.cos(ang), py+sz*np.sin(ang)),
-                                   (px+sz*np.cos(ang+2.5), py+sz*np.sin(ang+2.5)),
-                                   (px+sz*np.cos(ang-2.5), py+sz*np.sin(ang-2.5))],
-                                  closed=True, edgecolor=col_c, facecolor='none', lw=sw, zorder=4)
+            tri = patches.Polygon([(px+sz*np.cos(ang), py+sz*np.sin(ang)), (px+sz*np.cos(ang+2.5), py+sz*np.sin(ang+2.5)), (px+sz*np.cos(ang-2.5), py+sz*np.sin(ang-2.5))], closed=True, edgecolor=col_c, facecolor='none', lw=sw, zorder=4)
             ax.add_patch(tri)
 
             px, py = full_shifted[-1]
@@ -369,27 +364,15 @@ class MasterMaze:
             raw_poles = pole_coords if pole_coords else unique_cp_coords
             unique_raw_poles = list(dict.fromkeys(raw_poles))
             poles_shifted = [self._get_safe_shift(c[0], c[1]) for c in unique_raw_poles]
-            
-            for px, py in poles_shifted:
-                self._draw_center_marker(ax, px, py, col_w, zorder=3.5)
+            for px, py in poles_shifted: self._draw_center_marker(ax, px, py, col_w, zorder=3.5)
 
             for coord, indices in cp_indices_map.items():
                 px, py = coord_to_shifted[coord]
                 label = "/".join(map(str, indices))
-                
-                adjacents = []
-                for idx in indices:
-                    if idx > 0: adjacents.append(full_shifted[idx-1])
-                    if idx < len(full_shifted)-1: adjacents.append(full_shifted[idx+1])
-                adjacents = list(set(map(tuple, adjacents)))
-
+                adjacents = list(set(map(tuple, [full_shifted[idx-1] for idx in indices if idx>0] + [full_shifted[idx+1] for idx in indices if idx < len(full_shifted)-1])))
                 tx, ty = self._get_optimal_text_pos(px, py, coord[0], coord[1], unique_shifted, adjacents, label)
-                
                 ax.add_patch(patches.Circle((px, py), 0.35, edgecolor=col_c, facecolor='none', lw=sw, zorder=4))
-                ax.text(tx, ty, label, color=col_c, fontsize=11, ha='center', va='center', 
-                        fontweight='bold', zorder=5, clip_on=False,
-                        bbox=dict(facecolor='white', alpha=0.9, edgecolor='none', pad=0.1))
+                ax.text(tx, ty, label, color=col_c, fontsize=11, ha='center', va='center', fontweight='bold', zorder=5, clip_on=False, bbox=dict(facecolor='white', alpha=0.9, edgecolor='none', pad=0.1))
 
-        # 🔧 ЯВНОЕ УКАЗАНИЕ ФОРМАТА
         plt.savefig(filename, format=img_format, bbox_inches='tight', pad_inches=0.3)
         plt.close()
