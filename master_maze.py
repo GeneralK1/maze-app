@@ -120,7 +120,7 @@ class MasterMaze:
         # 🎯 Настройки в зависимости от сложности
         if difficulty < 0.33:  # Легкая
             max_repeats = 0
-            max_leg_dist = map_diag * 0.35  # Короткие перегоны (~35% диагонали)
+            max_leg_dist = map_diag * 0.35  # Короткие перегоны
             dist_weight = -1.5              # Сильный приоритет близким КП
         elif difficulty < 0.66:  # Средняя
             max_repeats = 1
@@ -148,8 +148,8 @@ class MasterMaze:
                 if p == current: continue
                 count = used_counts.get(p, 0)
 
-                # Запрет повторов (для легких - 0, для сложных - N)
-                if count >= max_repeats: continue
+                # ✅ ИСПРАВЛЕНО: разрешаем посещать, пока count <= max_repeats
+                if count > max_repeats: continue
 
                 # Запрет строгой вертикали/горизонтали
                 if p[0] == current[0] or p[1] == current[1]: continue
@@ -158,12 +158,12 @@ class MasterMaze:
                 if prev_p is not None:
                     dx_in, dy_in = current[0]-prev_p[0], current[1]-prev_p[1]
                     dx_out, dy_out = p[0]-current[0], p[1]-current[1]
-                    dot = dx_in*dx_out + dy_in*dy_out
                     mag_in = math.hypot(dx_in, dy_in)
                     mag_out = math.hypot(dx_out, dy_out)
                     if mag_in > 0.1 and mag_out > 0.1:
+                        dot = dx_in*dx_out + dy_in*dy_out
                         cos_theta = dot / (mag_in * mag_out)
-                        # Убираем углы < 37° и > 143° (избегаем ~0° и ~180°)
+                        # Убираем углы < 37° и > 143°
                         if abs(cos_theta) > 0.8: continue
 
                 dist = math.hypot(p[0]-current[0], p[1]-current[1])
@@ -174,13 +174,14 @@ class MasterMaze:
                 zone = self._get_zone_3x3(*p)
                 if zone in empty_zones: score += 10.0  # Максимальный бонус за пустые зоны
                 if count == 0: score += 5.0            # Бонус за первый визит
-                score += dist * dist_weight            # Вес расстояния (зависит от сложности)
+                score += dist * dist_weight            # Вес расстояния
 
                 candidates.append({'p': p, 'score': score, 'dist': dist})
 
             if not candidates:
-                # Фоллбэк: расширяем радиус поиска, если застряли
-                max_leg_dist += 0.5
+                # Фоллбэк: плавно расширяем радиус поиска, если застряли
+                max_leg_dist += 2.0
+                if max_leg_dist > map_diag * 1.5: break
                 continue
 
             # Сортировка и случайный выбор из топ-3
