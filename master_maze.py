@@ -114,22 +114,14 @@ class MasterMaze:
         return center_cps[:center_count] + outer_cps[:total_cps - center_count]
 
     def generate_course(self, pool, start, finish, target_len, course_idx, total_courses):
+        # 🔢 ЯВНОЕ МАСШТАБИРОВАНИЕ: Курс 0 (Дистанция 1) = 0.0 (Легкая), Курс N-1 = 1.0 (Сложная)
         difficulty = course_idx / max(1, total_courses - 1)
         map_diag = math.hypot(self.width, self.height)
-
-        # 🎯 Настройки в зависимости от сложности
-        if difficulty < 0.33:  # Легкая
-            max_repeats = 0
-            max_leg_dist = map_diag * 0.35  # Короткие перегоны
-            dist_weight = -1.5              # Сильный приоритет близким КП
-        elif difficulty < 0.66:  # Средняя
-            max_repeats = 1
-            max_leg_dist = map_diag * 0.55
-            dist_weight = 0.0               # Нейтрально
-        else:  # Сложная
-            max_repeats = 4
-            max_leg_dist = map_diag * 0.85  # Длинные перегоны
-            dist_weight = 1.5               # Приоритет дальним КП
+        
+        # Параметры плавно меняются от легких к сложным
+        max_repeats = int(round(difficulty * 4))          # 0 для 1-й дистанции -> 4 для последней
+        max_leg_dist = map_diag * (0.35 + 0.5 * difficulty) # 35% -> 85% диагонали
+        dist_weight = -1.5 + 3.0 * difficulty              # -1.5 (ближние) -> +1.5 (дальние)
 
         route = [start]
         current = start
@@ -147,13 +139,9 @@ class MasterMaze:
             for p in pool:
                 if p == current: continue
                 count = used_counts.get(p, 0)
-
-                # ✅ ИСПРАВЛЕНО: разрешаем посещать, пока count <= max_repeats
                 if count > max_repeats: continue
-
-                # Запрет строгой вертикали/горизонтали
                 if p[0] == current[0] or p[1] == current[1]: continue
-
+                
                 # 🔄 ВАЛИДАЦИЯ УГЛА: исключаем прямые линии и острые углы
                 if prev_p is not None:
                     dx_in, dy_in = current[0]-prev_p[0], current[1]-prev_p[1]
@@ -163,7 +151,6 @@ class MasterMaze:
                     if mag_in > 0.1 and mag_out > 0.1:
                         dot = dx_in*dx_out + dy_in*dy_out
                         cos_theta = dot / (mag_in * mag_out)
-                        # Убираем углы < 37° и > 143°
                         if abs(cos_theta) > 0.8: continue
 
                 dist = math.hypot(p[0]-current[0], p[1]-current[1])
@@ -174,7 +161,7 @@ class MasterMaze:
                 zone = self._get_zone_3x3(*p)
                 if zone in empty_zones: score += 10.0  # Максимальный бонус за пустые зоны
                 if count == 0: score += 5.0            # Бонус за первый визит
-                score += dist * dist_weight            # Вес расстояния
+                score += dist * dist_weight            # Вес расстояния (зависит от сложности)
 
                 candidates.append({'p': p, 'score': score, 'dist': dist})
 
