@@ -116,19 +116,20 @@ class MasterMaze:
     def generate_course(self, pool, start, finish, target_len, course_idx, total_courses):
         difficulty = course_idx / max(1, total_courses - 1)
         map_diag = math.hypot(self.width, self.height)
-        
-        if difficulty < 0.3:
-            max_leg_dist = map_diag * 0.35
-            prefer_short = True
-            max_center_repeats = 0
-        elif difficulty < 0.7:
-            max_leg_dist = map_diag * 0.6
-            prefer_short = False
-            max_center_repeats = 3
-        else:
-            max_leg_dist = map_diag * 0.9
-            prefer_short = False
-            max_center_repeats = 6
+
+        # 🎯 Настройки в зависимости от сложности
+        if difficulty < 0.33:  # Легкая
+            max_repeats = 0
+            max_leg_dist = map_diag * 0.35  # Короткие перегоны (~35% диагонали)
+            dist_weight = -1.5              # Сильный приоритет близким КП
+        elif difficulty < 0.66:  # Средняя
+            max_repeats = 1
+            max_leg_dist = map_diag * 0.55
+            dist_weight = 0.0               # Нейтрально
+        else:  # Сложная
+            max_repeats = 4
+            max_leg_dist = map_diag * 0.85  # Длинные перегоны
+            dist_weight = 1.5               # Приоритет дальним КП
 
         route = [start]
         current = start
@@ -136,26 +137,24 @@ class MasterMaze:
         used_counts = {p: 0 for p in pool}
 
         for _ in range(target_len):
+            # 1. Оценка заполненности 9 зон карты
             zones = [0] * 9
             for p in route: zones[self._get_zone_3x3(*p)] += 1
             min_visits = min(zones)
-            target_zones = [z for z, count in enumerate(zones) if count == min_visits]
+            empty_zones = [z for z, c in enumerate(zones) if c == min_visits]
 
             candidates = []
             for p in pool:
                 if p == current: continue
-                zone = self._get_zone_3x3(*p)
-                is_center = (zone == 4)
                 count = used_counts.get(p, 0)
-                
-                if is_center and count >= max_center_repeats: continue
-                if not is_center and count >= 1: continue
-                if p[0] == current[0] or p[1] == current[1]: continue
-                
-                dist = math.hypot(p[0]-current[0], p[1]-current[1])
-                if difficulty < 0.3 and dist > max_leg_dist: continue
 
-                # 🔄 ЗАПРЕТ БЛИЗКИХ К 0° УГЛОВ (менее ~32 градусов)
+                # Запрет повторов (для легких - 0, для сложных - N)
+                if count >= max_repeats: continue
+
+                # Запрет строгой вертикали/горизонтали
+                if p[0] == current[0] or p[1] == current[1]: continue
+
+                # 🔄 ВАЛИДАЦИЯ УГЛА: исключаем прямые линии и острые углы
                 if prev_p is not None:
                     dx_in, dy_in = current[0]-prev_p[0], current[1]-prev_p[1]
                     dx_out, dy_out = p[0]-current[0], p[1]-current[1]
@@ -164,23 +163,30 @@ class MasterMaze:
                     mag_out = math.hypot(dx_out, dy_out)
                     if mag_in > 0.1 and mag_out > 0.1:
                         cos_theta = dot / (mag_in * mag_out)
-                        if cos_theta > 0.85: continue
+                        # Убираем углы < 37° и > 143° (избегаем ~0° и ~180°)
+                        if abs(cos_theta) > 0.8: continue
 
-                pri = 0
-                if count == 0: pri += 2
-                if zone in target_zones: pri += 5 
-                if is_center: pri += 1 
+                dist = math.hypot(p[0]-current[0], p[1]-current[1])
+                if dist > max_leg_dist: continue
 
-                dist_score = -dist if prefer_short else dist
-                candidates.append({'p': p, 'pri': pri, 'dist_score': dist_score})
+                # 📊 Оценка приоритета
+                score = 0.0
+                zone = self._get_zone_3x3(*p)
+                if zone in empty_zones: score += 10.0  # Максимальный бонус за пустые зоны
+                if count == 0: score += 5.0            # Бонус за первый визит
+                score += dist * dist_weight            # Вес расстояния (зависит от сложности)
+
+                candidates.append({'p': p, 'score': score, 'dist': dist})
 
             if not candidates:
-                max_leg_dist += 1.0
+                # Фоллбэк: расширяем радиус поиска, если застряли
+                max_leg_dist += 0.5
                 continue
 
-            candidates.sort(key=lambda k: (k['pri'], k['dist_score']), reverse=True)
+            # Сортировка и случайный выбор из топ-3
+            candidates.sort(key=lambda k: k['score'], reverse=True)
             chosen = random.choice(candidates[:min(3, len(candidates))])['p']
-            
+
             route.append(chosen)
             used_counts[chosen] += 1
             prev_p = current
@@ -279,14 +285,11 @@ class MasterMaze:
                     points.add((x + 1, y + 1))
         return points
 
-    # 🔧 ДОБАВЛЕН ПАРАМЕТР img_format
     def draw_map(self, filename, course_points, title="", draw_lines=True, is_master=False, pole_coords=None, img_format='pdf', paper_format='A5'):
         ar = self.width / self.height
-        # Размеры бумаги в дюймах: A4 (11.69x8.27), A5 (8.27x5.83)
         if paper_format.upper() == 'A4': base_w, base_h = 11.69, 8.27
         else: base_w, base_h = 8.27, 5.83
             
-        # Автоматическая ориентация: если лабиринт широкий → landscape, иначе → portrait
         if ar > 1: fw, fh = base_w, base_h
         else:      fw, fh = base_h, base_w
             
