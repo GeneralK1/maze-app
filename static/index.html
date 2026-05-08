@@ -467,7 +467,6 @@
     </div>
 
     <script>
-        src="https://vk.com/js/api/mini_apps.js"
         let currentToken = null;
 
         function setStatus(msg, type = 'info') {
@@ -563,5 +562,15 @@
             }
         }
     </script>
+    <!-- Добавьте это ПЕРЕД закрывающим </body> -->
+<script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
+<script>
+    // Безопасная инициализация для VK
+    window.addEventListener('load', () => {
+        if (window.vkBridge) {
+            vkBridge.send('VKWebAppInit').catch(() => {});
+        }
+    });
+</script>
 </body>
 </html>
