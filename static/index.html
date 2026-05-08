@@ -522,7 +522,7 @@
             }
         }
 
-        async function downloadZip() {
+       async function downloadZip() {
     if (!currentToken) { 
         setStatus('❌ Сначала создайте предпросмотр', 'error'); 
         return; 
@@ -549,64 +549,40 @@
         
         if (!res.ok) throw new Error(res.statusText);
 
-        // Проверяем, запущено ли приложение в VK
-        const isVK = window.vkBridge || navigator.userAgent.includes('VK');
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const filename = `Maze_${document.getElementById('format').value}_${payload.w}x${payload.h}.zip`;
         
-        if (isVK) {
-            // Для VK: создаем blob и открываем в новой вкладке
-            const blob = await res.blob();
-            const url = window.URL.createObjectURL(blob);
+        // 📱 ПРОСТОЕ РЕШЕНИЕ: открываем в новой вкладке
+        // Это работает на ВСЕХ устройствах
+        const newWindow = window.open(url, '_blank');
+        
+        if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+            // Если popup заблокирован — создаем ссылку
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
             
-            // Пробуем разные методы для мобильных
-            if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-                // Мобильные: показываем инструкцию
-                setStatus('📱 Нажмите и удерживайте ссылку для скачивания', 'info');
-                
-                // Создаем временную ссылку
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `Maze_${document.getElementById('format').value}_${payload.w}x${payload.h}.zip`;
-                link.style.display = 'none';
-                document.body.appendChild(link);
-                
-                // Для iOS Safari
-                if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-                    window.location.href = url;
-                } else {
-                    link.click();
-                }
-                
-                setTimeout(() => {
-                    document.body.removeChild(link);
-                    window.URL.revokeObjectURL(url);
-                }, 1000);
-            } else {
-                // Десктоп в VK
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `Maze_${document.getElementById('format').value}_${payload.w}x${payload.h}.zip`;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                window.URL.revokeObjectURL(url);
-            }
-        } else {
-            // Обычный браузер (не VK)
-            const blob = await res.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `Maze_${document.getElementById('format').value}_${payload.w}x${payload.h}.zip`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
+            // Для iOS
+            setTimeout(() => {
+                window.location.href = url;
+            }, 100);
         }
         
-        setStatus('✅ Скачивание началось!', 'success');
+        setStatus('✅ Скачивание началось! Если нет — проверьте всплывающие окна', 'success');
+        
+        // Очищаем через 5 минут
+        setTimeout(() => {
+            window.URL.revokeObjectURL(url);
+        }, 300000);
+        
     } catch (e) {
         console.error('Download error:', e);
-        setStatus('❌ Ошибка скачивания. Попробуйте открыть в браузере', 'error');
+        setStatus('❌ Ошибка. Откройте сайт в Safari/Chrome', 'error');
     } finally {
         setLoading('btn-download', false);
     }
