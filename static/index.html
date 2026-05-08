@@ -523,44 +523,94 @@
         }
 
         async function downloadZip() {
-            if (!currentToken) {
-                setStatus('❌ Сначала создайте предпросмотр', 'error');
-                return;
-            }
-            setLoading('btn-download', true);
-            setStatus('⏳ Подготовка архива...', 'info');
+    if (!currentToken) { 
+        setStatus('❌ Сначала создайте предпросмотр', 'error'); 
+        return; 
+    }
+    
+    setLoading('btn-download', true); 
+    setStatus('⏳ Подготовка архива...', 'info');
 
-            try {
-                const payload = {
-                    w: +document.getElementById('w').value,
-                    h: +document.getElementById('h').value,
-                    cp: +document.getElementById('cp').value,
-                    courses: +document.getElementById('courses').value,
-                    format: document.getElementById('format').value,
-                    token: currentToken
-                };
-                const res = await fetch('/generate', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(payload)
-                });
-                if (!res.ok) throw new Error(res.statusText);
-                const blob = await res.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `Maze_${document.getElementById('format').value}_${payload.w}x${payload.h}.zip`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
+    try {
+        const payload = {
+            w: +document.getElementById('w').value,
+            h: +document.getElementById('h').value,
+            cp: +document.getElementById('cp').value,
+            courses: +document.getElementById('courses').value,
+            format: document.getElementById('format').value,
+            token: currentToken
+        };
+        
+        const res = await fetch('/generate', { 
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'}, 
+            body: JSON.stringify(payload) 
+        });
+        
+        if (!res.ok) throw new Error(res.statusText);
+
+        // Проверяем, запущено ли приложение в VK
+        const isVK = window.vkBridge || navigator.userAgent.includes('VK');
+        
+        if (isVK) {
+            // Для VK: создаем blob и открываем в новой вкладке
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            
+            // Пробуем разные методы для мобильных
+            if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+                // Мобильные: показываем инструкцию
+                setStatus('📱 Нажмите и удерживайте ссылку для скачивания', 'info');
+                
+                // Создаем временную ссылку
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `Maze_${document.getElementById('format').value}_${payload.w}x${payload.h}.zip`;
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                
+                // Для iOS Safari
+                if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+                    window.location.href = url;
+                } else {
+                    link.click();
+                }
+                
+                setTimeout(() => {
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(url);
+                }, 1000);
+            } else {
+                // Десктоп в VK
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `Maze_${document.getElementById('format').value}_${payload.w}x${payload.h}.zip`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
                 window.URL.revokeObjectURL(url);
-                setStatus('✅ Скачивание началось!', 'success');
-            } catch (e) {
-                setStatus('❌ Ошибка скачивания', 'error');
-            } finally {
-                setLoading('btn-download', false);
             }
+        } else {
+            // Обычный браузер (не VK)
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Maze_${document.getElementById('format').value}_${payload.w}x${payload.h}.zip`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
         }
+        
+        setStatus('✅ Скачивание началось!', 'success');
+    } catch (e) {
+        console.error('Download error:', e);
+        setStatus('❌ Ошибка скачивания. Попробуйте открыть в браузере', 'error');
+    } finally {
+        setLoading('btn-download', false);
+    }
+}
     </script>
     <!-- Добавьте это ПЕРЕД закрывающим </body> -->
 <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
